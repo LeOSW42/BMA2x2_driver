@@ -1,11 +1,12 @@
-obj-$(CONFIG_SENSORS_BMA2X2)	+= bstclass.o
+obj-m += bma2x2.o
+KERNEL_SRC = /dev/null
 
-obj-$(CONFIG_SENSORS_BMA2X2)	+= bma2x2.o
+all:
+	make -C $(KERNEL_SRC) M=$(PWD) modules
 
-ifeq ($(CONFIG_SENSORS_BMA2X2_ENABLE_INT1),y)
-	EXTRA_CFLAGS += -DBMA2X2_ENABLE_INT1
-endif
+modules_install:
+	make -C $(KERNEL_SRC) M=$(PWD) modules_install
 
-ifeq ($(CONFIG_BOSCH_BMA2X2_ENABLE_INT2),y)
-	EXTRA_CFLAGS += -DBMA2X2_ENABLE_INT2
-endif
+clean:
+	make -C $(KERNEL_SRC) M=$(PWD) clean
+
