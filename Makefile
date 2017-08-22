@@ -1,4 +1,6 @@
 obj-m += bma2x2.o
+obj-m += bstclass.o
+
 KERNEL_SRC = /dev/null
 
 all:
