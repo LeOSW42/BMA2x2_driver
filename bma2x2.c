@@ -1429,14 +1429,6 @@ struct bma2x2_data {
 
 	int ref_count;
 	struct input_dev *dev_interrupt;
-
-#ifdef CONFIG_SIG_MOTION
-	struct class *g_sensor_class;
-	struct device *g_sensor_dev;
-
-	/*struct bma250_platform_data *pdata;*/
-	atomic_t en_sig_motion;
-#endif
 };
 
 static int bma2x2_set_mode(struct i2c_client *client, u8 mode);
@@ -2047,54 +2039,6 @@ static int bma2x2_get_HIGH_sign(struct i2c_client *client, unsigned char
 
 	return comres;
 }
-
-#ifndef CONFIG_SIG_MOTION
-static int bma2x2_get_slope_first(struct i2c_client *client, unsigned char
-	param, unsigned char *intstatus)
-{
-	int comres = 0;
-	unsigned char data;
-
-	switch (param) {
-	case 0:
-		comres = bma2x2_smbus_read_byte(client,
-				BMA2X2_STATUS_TAP_SLOPE_REG, &data);
-		data = BMA2X2_GET_BITSLICE(data, BMA2X2_SLOPE_FIRST_X);
-		*intstatus = data;
-		break;
-	case 1:
-		comres = bma2x2_smbus_read_byte(client,
-				BMA2X2_STATUS_TAP_SLOPE_REG, &data);
-		data = BMA2X2_GET_BITSLICE(data, BMA2X2_SLOPE_FIRST_Y);
-		*intstatus = data;
-		break;
-	case 2:
-		comres = bma2x2_smbus_read_byte(client,
-				BMA2X2_STATUS_TAP_SLOPE_REG, &data);
-		data = BMA2X2_GET_BITSLICE(data, BMA2X2_SLOPE_FIRST_Z);
-		*intstatus = data;
-		break;
-	default:
-		break;
-	}
-
-	return comres;
-}
-
-static int bma2x2_get_slope_sign(struct i2c_client *client, unsigned char
-		*intstatus)
-{
-	int comres = 0;
-	unsigned char data;
-
-	comres = bma2x2_smbus_read_byte(client, BMA2X2_STATUS_TAP_SLOPE_REG,
-			&data);
-	data = BMA2X2_GET_BITSLICE(data, BMA2X2_SLOPE_SIGN_S);
-	*intstatus = data;
-
-	return comres;
-}
-#endif
 
 static int bma2x2_get_orient_status(struct i2c_client *client, unsigned char
 		*intstatus)
@@ -5743,92 +5687,6 @@ static ssize_t bma2x2_offset_z_store(struct device *dev,
 	return count;
 }
 
-#ifdef CONFIG_SIG_MOTION
-static int bma2x2_set_en_slope_int(struct bma2x2_data *bma2x2,
-		int en)
-{
-	int err;
-	struct i2c_client *client = bma2x2->bma2x2_client;
-
-	if (en) {
-		/* Set the related parameters which needs to be fine tuned by
-		* interfaces: slope_threshold and slope_duration
-		*/
-		/*dur: 192 samples ~= 3s*/
-		err = bma2x2_set_slope_duration(client, 0xc0);
-		err += bma2x2_set_slope_threshold(client, 0x16);
-
-		/*Enable the interrupts*/
-		err += bma2x2_set_Int_Enable(client, 5, 1);/*Slope X*/
-		err += bma2x2_set_Int_Enable(client, 6, 1);/*Slope Y*/
-		err += bma2x2_set_Int_Enable(client, 7, 1);/*Slope Z*/
-	#ifdef BMA2X2_ENABLE_INT1
-		/* TODO: SLOPE can now only be routed to INT1 pin*/
-		err += bma2x2_set_int1_pad_sel(client, PAD_SLOP);
-	#else
-		/* err += bma2x2_set_int2_pad_sel(client, PAD_SLOP); */
-	#endif
-	} else {
-		err = bma2x2_set_Int_Enable(client, 5, 0);/*Slope X*/
-		err += bma2x2_set_Int_Enable(client, 6, 0);/*Slope Y*/
-		err += bma2x2_set_Int_Enable(client, 7, 0);/*Slope Z*/
-	}
-	return err;
-}
-
-static ssize_t bma2x2_en_sig_motion_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct i2c_client *client = to_i2c_client(dev);
-	struct bma2x2_data *bma2x2 = i2c_get_clientdata(client);
-
-	return sprintf(buf, "%d\n", atomic_read(&bma2x2->en_sig_motion));
-}
-
-static int bma2x2_set_en_sig_motion(struct bma2x2_data *bma2x2,
-		int en)
-{
-	int err = 0;
-
-	en = (en >= 1) ? 1 : 0;  /* set sig motion sensor status */
-
-	if (atomic_read(&bma2x2->en_sig_motion) != en) {
-		if (en) {
-			err = bma2x2_set_mode(bma2x2->bma2x2_client,
-					BMA2X2_MODE_NORMAL);
-			err = bma2x2_set_en_slope_int(bma2x2, en);
-			enable_irq_wake(bma2x2->IRQ);
-		} else {
-			disable_irq_wake(bma2x2->IRQ);
-			err = bma2x2_set_en_slope_int(bma2x2, en);
-			err = bma2x2_set_mode(bma2x2->bma2x2_client,
-					BMA2X2_MODE_SUSPEND);
-		}
-		atomic_set(&bma2x2->en_sig_motion, en);
-	}
-	return err;
-}
-
-static ssize_t bma2x2_en_sig_motion_store(struct device *dev,
-		struct device_attribute *attr,
-		const char *buf, size_t count)
-{
-	unsigned long data;
-	int error;
-	struct i2c_client *client = to_i2c_client(dev);
-	struct bma2x2_data *bma2x2 = i2c_get_clientdata(client);
-
-	error = kstrtoul(buf, 10, &data);
-	if (error)
-		return error;
-
-	if ((data == 0) || (data == 1))
-		bma2x2_set_en_sig_motion(bma2x2, data);
-
-	return count;
-}
-#endif
-
 static DEVICE_ATTR(range, S_IRUGO|S_IWUSR|S_IWGRP,
 		bma2x2_range_show, bma2x2_range_store);
 static DEVICE_ATTR(bandwidth, S_IRUGO|S_IWUSR|S_IWGRP,
@@ -5931,10 +5789,6 @@ static DEVICE_ATTR(temperature, S_IRUGO,
 		bma2x2_temperature_show, NULL);
 static DEVICE_ATTR(place, S_IRUGO,
 		bma2x2_place_show, NULL);
-#ifdef CONFIG_SIG_MOTION
-static DEVICE_ATTR(en_sig_motion, S_IRUGO|S_IWUSR|S_IWGRP,
-		bma2x2_en_sig_motion_show, bma2x2_en_sig_motion_store);
-#endif
 
 static struct attribute *bma2x2_attributes[] = {
 	&dev_attr_range.attr,
@@ -5984,9 +5838,6 @@ static struct attribute *bma2x2_attributes[] = {
 	&dev_attr_softreset.attr,
 	&dev_attr_temperature.attr,
 	&dev_attr_place.attr,
-#ifdef CONFIG_SIG_MOTION
-	&dev_attr_en_sig_motion.attr,
-#endif
 
 	NULL
 };
@@ -5994,18 +5845,6 @@ static struct attribute *bma2x2_attributes[] = {
 static struct attribute_group bma2x2_attribute_group = {
 	.attrs = bma2x2_attributes
 };
-
-#ifdef CONFIG_SIG_MOTION
-static struct attribute *bma2x2_sig_motion_attributes[] = {
-	&dev_attr_slope_duration.attr,
-	&dev_attr_slope_threshold.attr,
-	&dev_attr_en_sig_motion.attr,
-	NULL
-};
-static struct attribute_group bma2x2_sig_motion_attribute_group = {
-	.attrs = bma2x2_sig_motion_attributes
-};
-#endif
 
 
 #if defined(BMA2X2_ENABLE_INT1) || defined(BMA2X2_ENABLE_INT2)
@@ -6063,57 +5902,7 @@ static void bma2x2_high_g_interrupt_handle(struct bma2x2_data *bma2x2)
 					"first is %d,sign is %d\n", i,
 						first_value, sign_value);
 	}
-
-
 }
-
-#ifndef CONFIG_SIG_MOTION
-static void bma2x2_slope_interrupt_handle(struct bma2x2_data *bma2x2)
-{
-	unsigned char first_value = 0;
-	unsigned char sign_value = 0;
-	int i;
-	for (i = 0; i < 3; i++) {
-		bma2x2_get_slope_first(bma2x2->bma2x2_client, i, &first_value);
-		if (first_value == 1) {
-			bma2x2_get_slope_sign(bma2x2->bma2x2_client,
-								&sign_value);
-			if (sign_value == 1) {
-				if (i == 0)
-					input_report_rel(bma2x2->dev_interrupt,
-							SLOP_INTERRUPT,
-							SLOPE_INTERRUPT_X_N);
-				if (i == 1)
-					input_report_rel(bma2x2->dev_interrupt,
-							SLOP_INTERRUPT,
-							SLOPE_INTERRUPT_Y_N);
-				if (i == 2)
-					input_report_rel(bma2x2->dev_interrupt,
-							SLOP_INTERRUPT,
-							SLOPE_INTERRUPT_Z_N);
-			} else {
-				if (i == 0)
-					input_report_rel(bma2x2->dev_interrupt,
-							SLOP_INTERRUPT,
-							SLOPE_INTERRUPT_X);
-				if (i == 1)
-					input_report_rel(bma2x2->dev_interrupt,
-							SLOP_INTERRUPT,
-							SLOPE_INTERRUPT_Y);
-				if (i == 2)
-					input_report_rel(bma2x2->dev_interrupt,
-							SLOP_INTERRUPT,
-							SLOPE_INTERRUPT_Z);
-
-			}
-		}
-
-		printk(KERN_INFO "Slop interrupt happened,exis is %d,"
-					"first is %d,sign is %d\n", i,
-						first_value, sign_value);
-	}
-}
-#endif
 
 static void bma2x2_irq_work_func(struct work_struct *work)
 {
@@ -6147,22 +5936,6 @@ static void bma2x2_irq_work_func(struct work_struct *work)
 	bma2x2_get_interruptstatus1(bma2x2->bma2x2_client, &status);
 	printk(KERN_INFO "bma2x2_irq_work_func, status = 0x%x\n", status);
 
-#ifdef CONFIG_SIG_MOTION
-	if (status & 0x04)	{
-		if (atomic_read(&bma2x2->en_sig_motion) == 1) {
-			printk(KERN_INFO
-				"Significant motion interrupt happened\n");
-			/* close sig sensor,
-			it will be open again if APP wants */
-			bma2x2_set_en_sig_motion(bma2x2, 0);
-
-			input_report_rel(bma2x2->dev_interrupt,
-				SLOP_INTERRUPT, 1);
-			input_sync(bma2x2->dev_interrupt);
-		}
-	}
-#endif
-
 	switch (status) {
 
 	case 0x01:
@@ -6174,12 +5947,6 @@ static void bma2x2_irq_work_func(struct work_struct *work)
 	case 0x02:
 		bma2x2_high_g_interrupt_handle(bma2x2);
 		break;
-
-#ifndef CONFIG_SIG_MOTION
-	case 0x04:
-		bma2x2_slope_interrupt_handle(bma2x2);
-		break;
-#endif
 
 	case 0x08:
 		printk(KERN_INFO "slow/ no motion interrupt happened\n");
@@ -6370,9 +6137,6 @@ static int bma2x2_probe(struct i2c_client *client,
 	data->IRQ = client->irq;
 	err = request_irq(data->IRQ, bma2x2_irq_handler, IRQF_TRIGGER_RISING,
 			"bma2x2", data);
-#ifdef CONFIG_SIG_MOTION
-	enable_irq_wake(data->IRQ);
-#endif
 	if (err)
 		dev_err(&client->dev,  "could not request irq\n");
 
@@ -6437,33 +6201,6 @@ static int bma2x2_probe(struct i2c_client *client,
 	data->dev_interrupt = dev_interrupt;
 	data->input = dev;
 
-#ifdef CONFIG_SIG_MOTION
-	data->g_sensor_class = class_create(THIS_MODULE, "sig_sensor");
-	if (IS_ERR(data->g_sensor_class)) {
-		err = PTR_ERR(data->g_sensor_class);
-		data->g_sensor_class = NULL;
-		printk(KERN_ERR "could not allocate g_sensor_class\n");
-		goto err_create_class;
-	}
-
-	data->g_sensor_dev = device_create(data->g_sensor_class,
-				NULL, 0, "%s", "g_sensor");
-	if (unlikely(IS_ERR(data->g_sensor_dev))) {
-		err = PTR_ERR(data->g_sensor_dev);
-		data->g_sensor_dev = NULL;
-
-		printk(KERN_ERR "could not allocate g_sensor_dev\n");
-		goto err_create_g_sensor_device;
-	}
-
-	dev_set_drvdata(data->g_sensor_dev, data);
-
-	err = sysfs_create_group(&data->g_sensor_dev->kobj,
-			&bma2x2_sig_motion_attribute_group);
-	if (err < 0)
-		goto error_sysfs;
-#endif
-
 	err = sysfs_create_group(&data->input->dev.kobj,
 			&bma2x2_attribute_group);
 	if (err < 0)
@@ -6505,9 +6242,6 @@ static int bma2x2_probe(struct i2c_client *client,
 	data->ref_count = 0;
 	data->fifo_datasel = 0;
 	data->fifo_count = 0;
-#ifdef CONFIG_SIG_MOTION
-	atomic_set(&data->en_sig_motion, 0);
-#endif
 
 	dev_notice(&client->dev, "BMA2x2 driver probe successfully");
 
@@ -6521,11 +6255,6 @@ bst_free_acc_exit:
 
 error_sysfs:
 	input_unregister_device(data->input);
-
-#ifdef CONFIG_SIG_MOTION
-err_create_g_sensor_device:
-	class_destroy(data->g_sensor_class);
-#endif
 
 err_register_input_device_interrupt:
 	input_free_device(dev_interrupt);
