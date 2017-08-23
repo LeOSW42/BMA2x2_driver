@@ -46,26 +46,6 @@ static void bst_dev_release(struct device *device)
 	module_put(THIS_MODULE);
 }
 
-
-#ifdef CONFIG_PM
-static int bst_dev_suspend(struct device *dev)
-{
-	return 0;
-}
-
-static int bst_dev_resume(struct device *dev)
-{
-	return 0;
-}
-
-static const struct dev_pm_ops bst_dev_pm_ops = {
-	.suspend    = bst_dev_suspend,
-	.resume     = bst_dev_resume,
-	.poweroff   = bst_dev_suspend,
-	.restore    = bst_dev_resume,
-};
-#endif /* CONFIG_PM */
-
 static const struct attribute_group *bst_dev_attr_groups[] = {
 	NULL
 };
@@ -73,9 +53,6 @@ static const struct attribute_group *bst_dev_attr_groups[] = {
 static struct device_type bst_dev_type = {
 	.groups      = bst_dev_attr_groups,
 	.release = bst_dev_release,
-#ifdef CONFIG_PM
-	.pm      = &bst_dev_pm_ops,
-#endif
 };
 
 
