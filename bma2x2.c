@@ -1240,75 +1240,6 @@
 #define BMA2X2_FIFO_DAT_SEL_Y                     2
 #define BMA2X2_FIFO_DAT_SEL_Z                     3
 
-#ifdef CONFIG_SENSORS_BMI058
-#define C_BMI058_One_U8X                                 1
-#define C_BMI058_Two_U8X                                 2
-#define BMI058_OFFSET_TRIGGER_X                BMA2X2_OFFSET_TRIGGER_Y
-#define BMI058_OFFSET_TRIGGER_Y                BMA2X2_OFFSET_TRIGGER_X
-
-/*! BMI058 X AXIS OFFSET REG definition*/
-#define BMI058_OFFSET_X_AXIS_REG              BMA2X2_OFFSET_Y_AXIS_REG
-/*! BMI058 Y AXIS OFFSET REG definition*/
-#define BMI058_OFFSET_Y_AXIS_REG              BMA2X2_OFFSET_X_AXIS_REG
-
-#define BMI058_FIFO_DAT_SEL_X                       BMA2X2_FIFO_DAT_SEL_Y
-#define BMI058_FIFO_DAT_SEL_Y                       BMA2X2_FIFO_DAT_SEL_X
-
-/*! BMA2x2 common slow no motion X interrupt type definition*/
-#define BMA2X2_SLOW_NO_MOT_X_INT          12
-/*! BMA2x2 common slow no motion Y interrupt type definition*/
-#define BMA2X2_SLOW_NO_MOT_Y_INT          13
-/*! BMA2x2 common High G X interrupt type definition*/
-#define BMA2X2_HIGHG_X_INT          1
-/*! BMA2x2 common High G Y interrupt type definition*/
-#define BMA2X2_HIGHG_Y_INT          2
-/*! BMA2x2 common slope X interrupt type definition*/
-#define BMA2X2_SLOPE_X_INT          5
-/*! BMA2x2 common slope Y interrupt type definition*/
-#define BMA2X2_SLOPE_Y_INT          6
-
-/*! this structure holds some interrupt types difference
-**between BMA2x2 and BMI058.
-*/
-struct interrupt_map_t {
-	int x;
-	int y;
-};
-/*!*Need to use BMA2x2 Common interrupt type definition to
-* instead of Some of BMI058 reversed Interrupt type
-* because of HW Register.
-* The reversed Interrupt types contain:
-* slow_no_mot_x_int && slow_not_mot_y_int
-* highg_x_int && highg_y_int
-* slope_x_int && slope_y_int
-**/
-static const struct interrupt_map_t int_map[] = {
-	{BMA2X2_SLOW_NO_MOT_X_INT, BMA2X2_SLOW_NO_MOT_Y_INT},
-	{BMA2X2_HIGHG_X_INT, BMA2X2_HIGHG_Y_INT},
-	{BMA2X2_SLOPE_X_INT, BMA2X2_SLOPE_Y_INT}
-};
-
-/*! high g or slope interrupt type definition for BMI058*/
-/*! High G interrupt of x, y, z axis happened */
-#define HIGH_G_INTERRUPT_X            HIGH_G_INTERRUPT_Y_HAPPENED
-#define HIGH_G_INTERRUPT_Y            HIGH_G_INTERRUPT_X_HAPPENED
-#define HIGH_G_INTERRUPT_Z            HIGH_G_INTERRUPT_Z_HAPPENED
-/*! High G interrupt of x, y, z negative axis happened */
-#define HIGH_G_INTERRUPT_X_N          HIGH_G_INTERRUPT_Y_NEGATIVE_HAPPENED
-#define HIGH_G_INTERRUPT_Y_N          HIGH_G_INTERRUPT_X_NEGATIVE_HAPPENED
-#define HIGH_G_INTERRUPT_Z_N          HIGH_G_INTERRUPT_Z_NEGATIVE_HAPPENED
-/*! Slope interrupt of x, y, z axis happened */
-#define SLOPE_INTERRUPT_X             SLOPE_INTERRUPT_Y_HAPPENED
-#define SLOPE_INTERRUPT_Y             SLOPE_INTERRUPT_X_HAPPENED
-#define SLOPE_INTERRUPT_Z             SLOPE_INTERRUPT_Z_HAPPENED
-/*! Slope interrupt of x, y, z negative axis happened */
-#define SLOPE_INTERRUPT_X_N           SLOPE_INTERRUPT_Y_NEGATIVE_HAPPENED
-#define SLOPE_INTERRUPT_Y_N           SLOPE_INTERRUPT_X_NEGATIVE_HAPPENED
-#define SLOPE_INTERRUPT_Z_N           SLOPE_INTERRUPT_Z_NEGATIVE_HAPPENED
-
-
-#else
-
 /*! high g or slope interrupt type definition*/
 /*! High G interrupt of x, y, z axis happened */
 #define HIGH_G_INTERRUPT_X            HIGH_G_INTERRUPT_X_HAPPENED
@@ -1326,10 +1257,6 @@ static const struct interrupt_map_t int_map[] = {
 #define SLOPE_INTERRUPT_X_N           SLOPE_INTERRUPT_X_NEGATIVE_HAPPENED
 #define SLOPE_INTERRUPT_Y_N           SLOPE_INTERRUPT_Y_NEGATIVE_HAPPENED
 #define SLOPE_INTERRUPT_Z_N           SLOPE_INTERRUPT_Z_NEGATIVE_HAPPENED
-
-
-#endif/*End of CONFIG_SENSORS_BMI058*/
-
 
 struct bma2x2_type_map_t {
 
@@ -1489,16 +1416,9 @@ static void bma2x2_remap_sensor_data(struct bma2x2acc *val,
 			 == client_data->bst_pd->place))
 		return;
 
-#ifdef CONFIG_SENSORS_BMI058
-/*x,y need to be invesed becase of HW Register for BMI058*/
-	bsd.y = val->x;
-	bsd.x = val->y;
-	bsd.z = val->z;
-#else
 	bsd.x = val->x;
 	bsd.y = val->y;
 	bsd.z = val->z;
-#endif
 
 	bst_remap_sensor_data_dft_tab(&bsd,
 			client_data->bst_pd->place);
@@ -3326,13 +3246,8 @@ static int bma2x2_set_offset_x(struct i2c_client *client, unsigned char
 
 	data =  offsetfilt;
 
-#ifdef CONFIG_SENSORS_BMI058
-	comres = bma2x2_smbus_write_byte(client, BMI058_OFFSET_X_AXIS_REG,
-							&data);
-#else
 	comres = bma2x2_smbus_write_byte(client, BMA2X2_OFFSET_X_AXIS_REG,
 						&data);
-#endif
 
 	return comres;
 }
@@ -3343,14 +3258,8 @@ static int bma2x2_get_offset_x(struct i2c_client *client, unsigned char
 {
 	int comres = 0;
 	unsigned char data;
-
-#ifdef CONFIG_SENSORS_BMI058
-	comres = bma2x2_smbus_read_byte(client, BMI058_OFFSET_X_AXIS_REG,
-							&data);
-#else
 	comres = bma2x2_smbus_read_byte(client, BMA2X2_OFFSET_X_AXIS_REG,
 							&data);
-#endif
 	*offsetfilt = data;
 
 	return comres;
@@ -3363,14 +3272,8 @@ static int bma2x2_set_offset_y(struct i2c_client *client, unsigned char
 	unsigned char data;
 
 	data =  offsetfilt;
-
-#ifdef CONFIG_SENSORS_BMI058
-	comres = bma2x2_smbus_write_byte(client, BMI058_OFFSET_Y_AXIS_REG,
-							&data);
-#else
 	comres = bma2x2_smbus_write_byte(client, BMA2X2_OFFSET_Y_AXIS_REG,
 							&data);
-#endif
 	return comres;
 }
 
@@ -3379,14 +3282,8 @@ static int bma2x2_get_offset_y(struct i2c_client *client, unsigned char
 {
 	int comres = 0;
 	unsigned char data;
-
-#ifdef CONFIG_SENSORS_BMI058
-	comres = bma2x2_smbus_read_byte(client, BMI058_OFFSET_Y_AXIS_REG,
-							&data);
-#else
 	comres = bma2x2_smbus_read_byte(client, BMA2X2_OFFSET_Y_AXIS_REG,
 							&data);
-#endif
 	*offsetfilt = data;
 
 	return comres;
@@ -3667,24 +3564,8 @@ static ssize_t bma2x2_enable_int_store(struct device *dev,
 	int type, value;
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma2x2_data *bma2x2 = i2c_get_clientdata(client);
-#ifdef CONFIG_SENSORS_BMI058
-	int i;
-#endif
 
 	sscanf(buf, "%3d %3d", &type, &value);
-
-#ifdef CONFIG_SENSORS_BMI058
-	for (i = 0; i < sizeof(int_map) / sizeof(struct interrupt_map_t); i++) {
-		if (int_map[i].x == type) {
-			type = int_map[i].y;
-			break;
-		}
-		if (int_map[i].y == type) {
-			type = int_map[i].x;
-			break;
-		}
-	}
-#endif
 
 	if (bma2x2_set_Int_Enable(bma2x2->bma2x2_client, type, value) < 0)
 		return -EINVAL;
@@ -4393,20 +4274,10 @@ static ssize_t bma2x2_selftest_store(struct device *dev,
 
 	if ((bma2x2->sensor_type == BMA280_TYPE) ||
 		(bma2x2->sensor_type == BMA255_TYPE)) {
-#ifdef CONFIG_SENSORS_BMI058
-		/*set self test amp */
-		if (bma2x2_set_selftest_amp(bma2x2->bma2x2_client, 1) < 0)
-			return -EINVAL;
-		/* set to 8 G range */
-		if (bma2x2_set_range(bma2x2->bma2x2_client,
-							BMA2X2_RANGE_8G) < 0)
-			return -EINVAL;
-#else
 		/* set to 4 G range */
 		if (bma2x2_set_range(bma2x2->bma2x2_client,
 							BMA2X2_RANGE_4G) < 0)
 			return -EINVAL;
-#endif
 	}
 
 	if ((bma2x2->sensor_type == BMA250E_TYPE) ||
@@ -4430,24 +4301,13 @@ static ssize_t bma2x2_selftest_store(struct device *dev,
 					bma2x2->sensor_type, &value2);
 	diff = value1-value2;
 
-#ifdef CONFIG_SENSORS_BMI058
-	printk(KERN_INFO "diff y is %d,value1 is %d, value2 is %d\n", diff,
-				value1, value2);
-	test_result_branch = 2;
-#else
 	printk(KERN_INFO "diff x is %d,value1 is %d, value2 is %d\n", diff,
 				value1, value2);
 	test_result_branch = 1;
-#endif
 
 	if (bma2x2->sensor_type == BMA280_TYPE) {
-#ifdef CONFIG_SENSORS_BMI058
-		if (abs(diff) < 819)
-			result |= test_result_branch;
-#else
 		if (abs(diff) < 1638)
 			result |= test_result_branch;
-#endif
 	}
 	if (bma2x2->sensor_type == BMA255_TYPE) {
 		if (abs(diff) < 409)
@@ -4474,24 +4334,13 @@ static ssize_t bma2x2_selftest_store(struct device *dev,
 					bma2x2->sensor_type, &value2);
 	diff = value1-value2;
 
-#ifdef CONFIG_SENSORS_BMI058
-	printk(KERN_INFO "diff x is %d,value1 is %d, value2 is %d\n", diff,
-				value1, value2);
-	test_result_branch = 1;
-#else
 	printk(KERN_INFO "diff y is %d,value1 is %d, value2 is %d\n", diff,
 				value1, value2);
 	test_result_branch = 2;
-#endif
 
 	if (bma2x2->sensor_type == BMA280_TYPE) {
-#ifdef CONFIG_SENSORS_BMI058
-		if (abs(diff) < 819)
-			result |= test_result_branch;
-#else
 		if (abs(diff) < 1638)
 			result |= test_result_branch;
-#endif
 	}
 	if (bma2x2->sensor_type == BMA255_TYPE) {
 		if (abs(diff) < 409)
@@ -4522,13 +4371,8 @@ static ssize_t bma2x2_selftest_store(struct device *dev,
 			value1, value2);
 
 	if (bma2x2->sensor_type == BMA280_TYPE) {
-#ifdef CONFIG_SENSORS_BMI058
-			if (abs(diff) < 409)
-				result |= 4;
-#else
 			if (abs(diff) < 819)
 				result |= 4;
-#endif
 	}
 	if (bma2x2->sensor_type == BMA255_TYPE) {
 		if (abs(diff) < 204)
@@ -4984,15 +4828,9 @@ static ssize_t bma2x2_fast_calibration_x_show(struct device *dev,
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma2x2_data *bma2x2 = i2c_get_clientdata(client);
 
-#ifdef CONFIG_SENSORS_BMI058
-	if (bma2x2_get_offset_target(bma2x2->bma2x2_client,
-				BMI058_OFFSET_TRIGGER_X, &data) < 0)
-		return sprintf(buf, "Read error\n");
-#else
 	if (bma2x2_get_offset_target(bma2x2->bma2x2_client,
 				BMA2X2_OFFSET_TRIGGER_X, &data) < 0)
 		return sprintf(buf, "Read error\n");
-#endif
 
 	return sprintf(buf, "%d\n", data);
 
@@ -5013,15 +4851,9 @@ static ssize_t bma2x2_fast_calibration_x_store(struct device *dev,
 	if (error)
 		return error;
 
-#ifdef CONFIG_SENSORS_BMI058
-	if (bma2x2_set_offset_target(bma2x2->bma2x2_client,
-			BMI058_OFFSET_TRIGGER_X, (unsigned char)data) < 0)
-		return -EINVAL;
-#else
 	if (bma2x2_set_offset_target(bma2x2->bma2x2_client,
 			BMA2X2_OFFSET_TRIGGER_X, (unsigned char)data) < 0)
 		return -EINVAL;
-#endif
 
 	if (bma2x2_set_cal_trigger(bma2x2->bma2x2_client, 1) < 0)
 		return -EINVAL;
@@ -5053,15 +4885,9 @@ static ssize_t bma2x2_fast_calibration_y_show(struct device *dev,
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bma2x2_data *bma2x2 = i2c_get_clientdata(client);
 
-#ifdef CONFIG_SENSORS_BMI058
-	if (bma2x2_get_offset_target(bma2x2->bma2x2_client,
-					BMI058_OFFSET_TRIGGER_Y, &data) < 0)
-		return sprintf(buf, "Read error\n");
-#else
 	if (bma2x2_get_offset_target(bma2x2->bma2x2_client,
 					BMA2X2_OFFSET_TRIGGER_Y, &data) < 0)
 		return sprintf(buf, "Read error\n");
-#endif
 
 	return sprintf(buf, "%d\n", data);
 
@@ -5082,15 +4908,9 @@ static ssize_t bma2x2_fast_calibration_y_store(struct device *dev,
 	if (error)
 		return error;
 
-#ifdef CONFIG_SENSORS_BMI058
-	if (bma2x2_set_offset_target(bma2x2->bma2x2_client,
-			BMI058_OFFSET_TRIGGER_Y, (unsigned char)data) < 0)
-		return -EINVAL;
-#else
 	if (bma2x2_set_offset_target(bma2x2->bma2x2_client,
 			BMA2X2_OFFSET_TRIGGER_Y, (unsigned char)data) < 0)
 		return -EINVAL;
-#endif
 
 	if (bma2x2_set_cal_trigger(bma2x2->bma2x2_client, 2) < 0)
 		return -EINVAL;
@@ -5323,14 +5143,6 @@ static ssize_t bma2x2_fifo_data_sel_show(struct device *dev,
 	if (bma2x2_get_fifo_data_sel(bma2x2->bma2x2_client, &data) < 0)
 		return sprintf(buf, "Read error\n");
 
-#ifdef CONFIG_SENSORS_BMI058
-/*Update BMI058 fifo_data_sel to the BMA2x2 common definition*/
-	if (BMI058_FIFO_DAT_SEL_X == data)
-		data = BMA2X2_FIFO_DAT_SEL_X;
-	else if (BMI058_FIFO_DAT_SEL_Y == data)
-		data = BMA2X2_FIFO_DAT_SEL_Y;
-#endif
-
 	/*remaping fifo_dat_sel if define virtual place in BSP files*/
 	if ((NULL != bma2x2->bst_pd) &&
 		(BOSCH_SENSOR_PLACE_UNKNOWN != bma2x2->bst_pd->place)) {
@@ -5435,14 +5247,6 @@ static ssize_t bma2x2_fifo_data_sel_store(struct device *dev,
 				data =  bst_axis_remap_tab_dft[place].src_y + 1;
 		}
 	}
-#ifdef CONFIG_SENSORS_BMI058
-	/*Update BMI058 fifo_data_sel to the BMA2x2 common definition*/
-		if (BMA2X2_FIFO_DAT_SEL_X == data)
-			data = BMI058_FIFO_DAT_SEL_X;
-		else if (BMA2X2_FIFO_DAT_SEL_Y == data)
-			data = BMI058_FIFO_DAT_SEL_Y;
-
-#endif
 	if (bma2x2_set_fifo_data_sel(bma2x2->bma2x2_client,
 				(unsigned char) data) < 0)
 		return -EINVAL;
