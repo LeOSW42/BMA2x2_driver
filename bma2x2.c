@@ -1226,10 +1226,6 @@
 #define MAX_FIFO_F_BYTES 6
 #define BMA_MAX_RETRY_I2C_XFER (100)
 
-#ifdef CONFIG_DOUBLE_TAP
-#define DEFAULT_TAP_JUDGE_PERIOD 1000    /* default judge in 1 second */
-#endif
-
 /*! Bosch sensor unknown place*/
 #define BOSCH_SENSOR_PLACE_UNKNOWN (-1)
 /*! Bosch sensor remapping table size P0~P7*/
@@ -1440,16 +1436,6 @@ struct bma2x2_data {
 
 	/*struct bma250_platform_data *pdata;*/
 	atomic_t en_sig_motion;
-#endif
-
-#ifdef CONFIG_DOUBLE_TAP
-	struct class *g_sensor_class_doubletap;
-	struct device *g_sensor_dev_doubletap;
-	atomic_t en_double_tap;
-	unsigned char tap_times;
-	struct mutex		tap_mutex;
-	struct timer_list	tap_timer;
-	int tap_time_period;
 #endif
 };
 
@@ -3019,7 +3005,7 @@ int bma2x2_get_sleep_duration(struct i2c_client *client, unsigned char
 		*sleep_dur)
 {
 	int comres = 0;
-	unsigned char data;
+	unsigned char data = 0;
 
 	comres = bma2x2_smbus_read_byte(client,
 			BMA2X2_SLEEP_DUR__REG, &data);
@@ -5843,128 +5829,6 @@ static ssize_t bma2x2_en_sig_motion_store(struct device *dev,
 }
 #endif
 
-#ifdef CONFIG_DOUBLE_TAP
-static int bma2x2_set_en_single_tap_int(struct bma2x2_data *bma2x2, int en)
-{
-	int err;
-	struct i2c_client *client = bma2x2->bma2x2_client;
-
-	if (en) {
-		/* set tap interruption parameter here if needed.
-		bma2x2_set_tap_duration(client, 0xc0);
-		bma2x2_set_tap_threshold(client, 0x16);
-		*/
-
-		/*Enable the single tap interrupts*/
-		err = bma2x2_set_Int_Enable(client, 8, 1);
-	#ifdef BMA2X2_ENABLE_INT1
-		err += bma2x2_set_int1_pad_sel(client, PAD_SINGLE_TAP);
-	#else
-		err += bma2x2_set_int2_pad_sel(client, PAD_SINGLE_TAP);
-	#endif
-	} else {
-		err = bma2x2_set_Int_Enable(client, 8, 0);
-	}
-	return err;
-}
-
-static ssize_t bma2x2_tap_time_period_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct i2c_client *client = to_i2c_client(dev);
-	struct bma2x2_data *bma2x2 = i2c_get_clientdata(client);
-
-	return sprintf(buf, "%d\n", bma2x2->tap_time_period);
-}
-
-static ssize_t bma2x2_tap_time_period_store(struct device *dev,
-		struct device_attribute *attr,
-		const char *buf, size_t count)
-{
-	unsigned long data;
-	int error;
-	struct i2c_client *client = to_i2c_client(dev);
-	struct bma2x2_data *bma2x2 = i2c_get_clientdata(client);
-
-	error = kstrtoul(buf, 10, &data);
-	if (error)
-		return error;
-
-	bma2x2->tap_time_period = data;
-
-	return count;
-}
-
-static ssize_t bma2x2_en_double_tap_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct i2c_client *client = to_i2c_client(dev);
-	struct bma2x2_data *bma2x2 = i2c_get_clientdata(client);
-
-	return sprintf(buf, "%d\n", atomic_read(&bma2x2->en_double_tap));
-}
-
-static int bma2x2_set_en_double_tap(struct bma2x2_data *bma2x2,
-		int en)
-{
-	int err = 0;
-
-	en = (en >= 1) ? 1 : 0;
-
-	if (atomic_read(&bma2x2->en_double_tap) != en) {
-		if (en) {
-			err = bma2x2_set_mode(bma2x2->bma2x2_client,
-					BMA2X2_MODE_NORMAL);
-			err = bma2x2_set_en_single_tap_int(bma2x2, en);
-		} else {
-			err = bma2x2_set_en_single_tap_int(bma2x2, en);
-			err = bma2x2_set_mode(bma2x2->bma2x2_client,
-					BMA2X2_MODE_SUSPEND);
-		}
-		atomic_set(&bma2x2->en_double_tap, en);
-	}
-	return err;
-}
-
-static ssize_t bma2x2_en_double_tap_store(struct device *dev,
-		struct device_attribute *attr,
-		const char *buf, size_t count)
-{
-	unsigned long data;
-	int error;
-	struct i2c_client *client = to_i2c_client(dev);
-	struct bma2x2_data *bma2x2 = i2c_get_clientdata(client);
-
-	error = kstrtoul(buf, 10, &data);
-	if (error)
-		return error;
-
-	if ((data == 0) || (data == 1))
-		bma2x2_set_en_double_tap(bma2x2, data);
-
-	return count;
-}
-
-static void bma2x2_tap_timeout_handle(unsigned long data)
-{
-	struct bma2x2_data *bma2x2 = (struct bma2x2_data *)data;
-
-	printk(KERN_INFO "tap interrupt handle, timeout\n");
-	mutex_lock(&bma2x2->tap_mutex);
-	bma2x2->tap_times = 0;
-	mutex_unlock(&bma2x2->tap_mutex);
-
-	/* if a single tap need to report, open the define */
-#ifdef REPORT_SINGLE_TAP_WHEN_DOUBLE_TAP_SENSOR_ENABLED
-	input_report_rel(bma2x2->dev_interrupt,
-		SINGLE_TAP_INTERRUPT,
-		SINGLE_TAP_INTERRUPT_HAPPENED);
-	input_sync(bma2x2->dev_interrupt);
-#endif
-
-}
-#endif
-
 static DEVICE_ATTR(range, S_IRUGO|S_IWUSR|S_IWGRP,
 		bma2x2_range_show, bma2x2_range_store);
 static DEVICE_ATTR(bandwidth, S_IRUGO|S_IWUSR|S_IWGRP,
@@ -6071,12 +5935,6 @@ static DEVICE_ATTR(place, S_IRUGO,
 static DEVICE_ATTR(en_sig_motion, S_IRUGO|S_IWUSR|S_IWGRP,
 		bma2x2_en_sig_motion_show, bma2x2_en_sig_motion_store);
 #endif
-#ifdef CONFIG_DOUBLE_TAP
-static DEVICE_ATTR(tap_time_period, S_IRUGO|S_IWUSR|S_IWGRP,
-		bma2x2_tap_time_period_show, bma2x2_tap_time_period_store);
-static DEVICE_ATTR(en_double_tap, S_IRUGO|S_IWUSR|S_IWGRP,
-		bma2x2_en_double_tap_show, bma2x2_en_double_tap_store);
-#endif
 
 static struct attribute *bma2x2_attributes[] = {
 	&dev_attr_range.attr,
@@ -6129,9 +5987,6 @@ static struct attribute *bma2x2_attributes[] = {
 #ifdef CONFIG_SIG_MOTION
 	&dev_attr_en_sig_motion.attr,
 #endif
-#ifdef CONFIG_DOUBLE_TAP
-	&dev_attr_en_double_tap.attr,
-#endif
 
 	NULL
 };
@@ -6149,22 +6004,6 @@ static struct attribute *bma2x2_sig_motion_attributes[] = {
 };
 static struct attribute_group bma2x2_sig_motion_attribute_group = {
 	.attrs = bma2x2_sig_motion_attributes
-};
-#endif
-
-#ifdef CONFIG_DOUBLE_TAP
-static struct attribute *bma2x2_double_tap_attributes[] = {
-	&dev_attr_tap_threshold.attr,
-	&dev_attr_tap_duration.attr,
-	&dev_attr_tap_quiet.attr,
-	&dev_attr_tap_shock.attr,
-	&dev_attr_tap_samp.attr,
-	&dev_attr_tap_time_period.attr,
-	&dev_attr_en_double_tap.attr,
-	NULL
-};
-static struct attribute_group bma2x2_double_tap_attribute_group = {
-	.attrs = bma2x2_double_tap_attributes
 };
 #endif
 
@@ -6280,9 +6119,6 @@ static void bma2x2_irq_work_func(struct work_struct *work)
 {
 	struct bma2x2_data *bma2x2 = container_of((struct work_struct *)work,
 			struct bma2x2_data, irq_work);
-#ifdef CONFIG_DOUBLE_TAP
-	struct i2c_client *client = bma2x2->bma2x2_client;
-#endif
 
 	unsigned char status = 0;
 	unsigned char first_value = 0;
@@ -6327,32 +6163,6 @@ static void bma2x2_irq_work_func(struct work_struct *work)
 	}
 #endif
 
-#ifdef CONFIG_DOUBLE_TAP
-	if (status & 0x20) {
-		if (atomic_read(&bma2x2->en_double_tap) == 1) {
-			printk(KERN_INFO "single tap interrupt happened\n");
-			bma2x2_set_Int_Enable(client, 8, 0);
-			if (bma2x2->tap_times == 0)	{
-				mod_timer(&bma2x2->tap_timer, jiffies +
-				msecs_to_jiffies(bma2x2->tap_time_period));
-				bma2x2->tap_times = 1;
-			} else {
-				/* only double tap is judged */
-				printk(KERN_INFO "double tap\n");
-				mutex_lock(&bma2x2->tap_mutex);
-				bma2x2->tap_times = 0;
-				del_timer(&bma2x2->tap_timer);
-				mutex_unlock(&bma2x2->tap_mutex);
-				input_report_rel(bma2x2->dev_interrupt,
-					DOUBLE_TAP_INTERRUPT,
-					DOUBLE_TAP_INTERRUPT_HAPPENED);
-				input_sync(bma2x2->dev_interrupt);
-			}
-			bma2x2_set_Int_Enable(client, 8, 1);
-		}
-	}
-#endif
-
 	switch (status) {
 
 	case 0x01:
@@ -6377,21 +6187,6 @@ static void bma2x2_irq_work_func(struct work_struct *work)
 			SLOW_NO_MOTION_INTERRUPT,
 			SLOW_NO_MOTION_INTERRUPT_HAPPENED);
 		break;
-
-#ifndef CONFIG_DOUBLE_TAP
-	case 0x10:
-		printk(KERN_INFO "double tap interrupt happened\n");
-		input_report_rel(bma2x2->dev_interrupt,
-			DOUBLE_TAP_INTERRUPT,
-			DOUBLE_TAP_INTERRUPT_HAPPENED);
-		break;
-	case 0x20:
-		printk(KERN_INFO "single tap interrupt happened\n");
-		input_report_rel(bma2x2->dev_interrupt,
-			SINGLE_TAP_INTERRUPT,
-			SINGLE_TAP_INTERRUPT_HAPPENED);
-		break;
-#endif
 
 	case 0x40:
 		bma2x2_get_orient_status(bma2x2->bma2x2_client,
@@ -6669,35 +6464,6 @@ static int bma2x2_probe(struct i2c_client *client,
 		goto error_sysfs;
 #endif
 
-#ifdef CONFIG_DOUBLE_TAP
-	data->g_sensor_class_doubletap =
-		class_create(THIS_MODULE, "dtap_sensor");
-	if (IS_ERR(data->g_sensor_class_doubletap)) {
-		err = PTR_ERR(data->g_sensor_class_doubletap);
-		data->g_sensor_class_doubletap = NULL;
-		printk(KERN_ERR "could not allocate g_sensor_class_doubletap\n");
-		goto err_create_class;
-	}
-
-	data->g_sensor_dev_doubletap = device_create(
-				data->g_sensor_class_doubletap,
-				NULL, 0, "%s", "g_sensor");
-	if (unlikely(IS_ERR(data->g_sensor_dev_doubletap))) {
-		err = PTR_ERR(data->g_sensor_dev_doubletap);
-		data->g_sensor_dev_doubletap = NULL;
-
-		printk(KERN_ERR "could not allocate g_sensor_dev_doubletap\n");
-		goto err_create_g_sensor_device_double_tap;
-	}
-
-	dev_set_drvdata(data->g_sensor_dev_doubletap, data);
-
-	err = sysfs_create_group(&data->g_sensor_dev_doubletap->kobj,
-			&bma2x2_double_tap_attribute_group);
-	if (err < 0)
-		goto error_sysfs;
-#endif
-
 	err = sysfs_create_group(&data->input->dev.kobj,
 			&bma2x2_attribute_group);
 	if (err < 0)
@@ -6742,14 +6508,6 @@ static int bma2x2_probe(struct i2c_client *client,
 #ifdef CONFIG_SIG_MOTION
 	atomic_set(&data->en_sig_motion, 0);
 #endif
-#ifdef CONFIG_DOUBLE_TAP
-	atomic_set(&data->en_double_tap, 0);
-	data->tap_times = 0;
-	data->tap_time_period = DEFAULT_TAP_JUDGE_PERIOD;
-	mutex_init(&data->tap_mutex);
-	setup_timer(&data->tap_timer, bma2x2_tap_timeout_handle,
-			(unsigned long)data);
-#endif
 
 	dev_notice(&client->dev, "BMA2x2 driver probe successfully");
 
@@ -6764,19 +6522,9 @@ bst_free_acc_exit:
 error_sysfs:
 	input_unregister_device(data->input);
 
-#ifdef CONFIG_DOUBLE_TAP
-err_create_g_sensor_device_double_tap:
-	class_destroy(data->g_sensor_class_doubletap);
-#endif
-
 #ifdef CONFIG_SIG_MOTION
 err_create_g_sensor_device:
 	class_destroy(data->g_sensor_class);
-#endif
-
-#if defined(CONFIG_SIG_MOTION) || defined(CONFIG_DOUBLE_TAP)
-err_create_class:
-	input_unregister_device(data->dev_interrupt);
 #endif
 
 err_register_input_device_interrupt:
