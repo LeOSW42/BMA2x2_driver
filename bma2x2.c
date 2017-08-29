@@ -1450,7 +1450,7 @@ static int bma2x2_spi_write_byte(struct spi_device *spi,
 	s32 dummy;
 	u16 frame = 0;
 
-	frame = 0x7F & (((u16)reg_addr << 8) | (u16)*data);
+	frame = 0x7FFF & (((u16)reg_addr << 8) | (u16)*data);
 
 	dummy = spi_write(spi, &frame, sizeof(frame));
 	if (dummy < 0)
