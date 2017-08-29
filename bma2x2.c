@@ -1451,7 +1451,7 @@ static int bma2x2_spi_write_byte(struct spi_device *spi,
 	s32 dummy;
 	u16 frame = 0;
 
-	frame = (reg_addr & 0x7F) | (*data << 8);
+	frame = 0x7FFF & ((reg_addr << 8) | *data);
 
 	struct spi_transfer	t = {
 		.tx_buf			= &frame,
