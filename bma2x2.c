@@ -1437,14 +1437,7 @@ static int bma2x2_spi_read_byte(struct spi_device *spi,
 
 	frame = 0x80 | reg_addr;
 
-//	dummy = spi_write_then_read(spi, &frame, sizeof(frame), data, sizeof(*data));
-//	if (dummy < 0)
-//		return -1;
-
-	dummy = spi_write(spi, &frame, sizeof(frame));
-	if (dummy < 0)
-		return -1;
-	dummy = spi_read(spi, data, sizeof(*data));
+	dummy = spi_write_then_read(spi, &frame, sizeof(frame), data, sizeof(*data));
 	if (dummy < 0)
 		return -1;
 
@@ -1481,14 +1474,7 @@ static int bma2x2_spi_read_byte_block(struct spi_device *spi,
 
 	frame = 0x80 | reg_addr;
 
-//	dummy = spi_write_then_read(spi, &frame, sizeof(frame), data, sizeof(*data) * len);
-//	if (dummy < 0)
-//		return -1;
-
-	dummy = spi_write(spi, &frame, sizeof(frame));
-	if (dummy < 0)
-		return -1;
-	dummy = spi_read(spi, data, sizeof(*data) * len);
+	dummy = spi_write_then_read(spi, &frame, sizeof(frame), data, sizeof(*data) * len);
 	if (dummy < 0)
 		return -1;
 
