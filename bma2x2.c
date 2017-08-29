@@ -1460,7 +1460,13 @@ static int bma2x2_spi_write_byte(struct spi_device *spi,
 
 	frame = (reg_addr & 0x7F) | (*data << 8);
 
-	dummy = spi_write(spi, &frame, sizeof(frame));
+	struct spi_transfer	t = {
+		.tx_buf			= &frame,
+		.len			= sizeof(frame),
+		.bits_per_word	= sizeof(frame)
+	};
+
+	dummy = spi_sync_transfer(spi, &t, 1);
 	if (dummy < 0)
 		return -1;
 	udelay(2);
