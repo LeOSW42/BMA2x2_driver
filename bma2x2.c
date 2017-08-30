@@ -1490,34 +1490,17 @@ static int bma2x2_spi_write_byte(struct spi_device *spi,
 static int bma2x2_spi_read_byte_block(struct spi_device *spi,
 		unsigned char reg_addr, unsigned char *data, unsigned short len)
 {
-	struct spi_transfer	t = {0};
-	s32 dummy = 0;
-	u8 *frame = kzalloc(1 + len, GFP_KERNEL);
-	u8 *buf = kzalloc(1 + len, GFP_KERNEL);
 	u8 i = 0;
+	s32 dummy = 0;
 
-	t.tx_buf = frame;
-	t.rx_buf = buf;
-	t.len = 1 + len;
-	t.bits_per_word = (1 + len) * 8;
-
-	frame[len] = 0x80 | reg_addr;
-	//*frame = 0x8000 | (reg_addr << 8);
-
-	dummy = spi_sync_transfer(spi, &t, 1);
-	if (dummy < 0) {
-		dev_err(&spi->dev, "SPI read error: %d\n", dummy);
-		kfree(frame);
-		kfree(buf);
-		return -1;
+	for(i=0 ; i<len ; i++) {
+		dummy = bma2x2_spi_read_byte(spi, reg_addr + i, &data[i]);
+		if (dummy < 0) {
+			dev_err(&spi->dev, "SPI read block error: %d\n", dummy);
+			return -1;
+		}
 	}
 
-	for(i=0 ; i<len ; i++)
-		data[i] = buf[i];
-
-	udelay(2);
-	kfree(frame);
-	kfree(buf);
 	return 0;
 }
 
