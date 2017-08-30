@@ -1455,7 +1455,6 @@ static int bma2x2_spi_read_byte(struct spi_device *spi,
 
 	data[0] = buf[0];
 
-	udelay(2);
 	kfree(frame);
 	kfree(buf);
 	return 0;
@@ -1482,7 +1481,7 @@ static int bma2x2_spi_write_byte(struct spi_device *spi,
 		kfree(frame);
 		return -1;
 	}
-	udelay(2);
+
 	kfree(frame);
 	return 0;
 }
