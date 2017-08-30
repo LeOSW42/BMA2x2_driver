@@ -1432,53 +1432,92 @@ static void bma2x2_remap_sensor_data(struct bma2x2acc *val,
 static int bma2x2_spi_read_byte(struct spi_device *spi,
 		unsigned char reg_addr, unsigned char *data)
 {
-	s32 dummy;
-	u8 frame = 0;
+	struct spi_transfer	t = {0};
+	s32 dummy = 0;
+	u8 *frame = kzalloc(2, GFP_KERNEL);
+	u8 *buf = kzalloc(2, GFP_KERNEL);
 
-	frame = 0x80 | reg_addr;
+	frame[1] = 0x80 | reg_addr;
+	//*frame = 0x8000 | (reg_addr << 8);
 
-	dummy = spi_write_then_read(spi, &frame, sizeof(frame), data, sizeof(*data));
-	if (dummy < 0)
+	t.tx_buf = frame;
+	t.rx_buf = buf;
+	t.len = 2;
+	t.bits_per_word = 2 * 8;
+
+	dummy = spi_sync_transfer(spi, &t, 1);
+	if (dummy < 0) {
+		dev_err(&spi->dev, "SPI read error: %d\n", dummy);
+		kfree(frame);
+		kfree(buf);
 		return -1;
+	}
+
+	data[0] = buf[0];
 
 	udelay(2);
+	kfree(frame);
+	kfree(buf);
 	return 0;
 }
 
 static int bma2x2_spi_write_byte(struct spi_device *spi,
 		unsigned char reg_addr, unsigned char *data)
 {
-	s32 dummy;
-	u16 frame = 0;
+	struct spi_transfer	t = {0};
+	s32 dummy = 0;
+	u8 *frame = kzalloc(2, GFP_KERNEL);
 
-	frame = 0x7FFF & ((reg_addr << 8) | *data);
+	frame[1] = 0x7F & reg_addr;
+	frame[0] = *data;
+	//*frame = 0x7FFF & ((reg_addr << 8) | *data);
 
-	struct spi_transfer	t = {
-		.tx_buf			= &frame,
-		.len			= sizeof(frame),
-		.bits_per_word	= sizeof(frame) * 8,
-	};
+	t.tx_buf = frame;
+	t.len = 2;
+	t.bits_per_word = 2 * 8;
 
 	dummy = spi_sync_transfer(spi, &t, 1);
-	if (dummy < 0)
+	if (dummy < 0) {
+		dev_err(&spi->dev, "SPI write error: %d\n", dummy);
+		kfree(frame);
 		return -1;
+	}
 	udelay(2);
+	kfree(frame);
 	return 0;
 }
 
 static int bma2x2_spi_read_byte_block(struct spi_device *spi,
 		unsigned char reg_addr, unsigned char *data, unsigned short len)
 {
-	s32 dummy;
-	u8 frame = 0;
+	struct spi_transfer	t = {0};
+	s32 dummy = 0;
+	u8 *frame = kzalloc(1 + len, GFP_KERNEL);
+	u8 *buf = kzalloc(1 + len, GFP_KERNEL);
+	u8 i = 0;
 
-	frame = 0x80 | reg_addr;
+	t.tx_buf = frame;
+	t.rx_buf = buf;
+	t.len = 1 + len;
+	t.bits_per_word = (1 + len) * 8;
 
-	dummy = spi_write_then_read(spi, &frame, sizeof(frame), data, sizeof(*data) * len);
-	if (dummy < 0)
+	frame[len] = 0x80 | reg_addr;
+	//*frame = 0x8000 | (reg_addr << 8);
+
+	dummy = spi_sync_transfer(spi, &t, 1);
+	if (dummy < 0) {
+		dev_err(&spi->dev, "SPI read error: %d\n", dummy);
+		kfree(frame);
+		kfree(buf);
 		return -1;
+	}
+
+	for(i=0 ; i<len ; i++)
+		data[i] = buf[i];
 
 	udelay(2);
+	kfree(frame);
+	kfree(buf);
 	return 0;
 }
 
